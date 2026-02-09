@@ -1,13 +1,20 @@
 // Get backend URL from environment or use default
 const BACKEND_URL = window.location.hostname === 'localhost' 
   ? 'http://localhost:3000' 
-  : 'https://your-backend-render-url.com';
+  : 'https://exam-iva-backend.onrender.com';
 
-// Initialize the form with 5 product inputs
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-  createProductInputs();
-  loadCalculationHistory();
   checkBackendHealth();
+  loadAvailableProducts();
+  loadSearchHistory();
+  
+  // Allow search on Enter key
+  document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      searchProduct();
+    }
+  });
 });
 
 // Check backend health
@@ -19,71 +26,65 @@ async function checkBackendHealth() {
       document.getElementById('backendStatus').style.color = '#28a745';
     }
   } catch (error) {
-    document.getElementById('backendStatus').textContent = '✗ Backend offline (local mode)';
+    document.getElementById('backendStatus').textContent = '✗ Backend offline';
     document.getElementById('backendStatus').style.color = '#dc3545';
   }
 }
 
-// Create 5 product input fields
-function createProductInputs() {
-  const container = document.getElementById('productsContainer');
-  container.innerHTML = '';
+// Load available products
+async function loadAvailableProducts() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/products`);
+    const result = await response.json();
 
-  for (let i = 1; i <= 5; i++) {
-    const productDiv = document.createElement('div');
-    productDiv.className = 'product-input';
-    productDiv.innerHTML = `
-      <div>
-        <label for="name${i}">Product ${i} Name</label>
-        <input type="text" id="name${i}" placeholder="e.g., Milk" required>
-      </div>
-      <div>
-        <label for="price${i}">Price $</label>
-        <input type="number" id="price${i}" placeholder="0.00" step="0.01" min="0" required>
-      </div>
-    `;
-    container.appendChild(productDiv);
+    if (result.success && result.data.length > 0) {
+      const container = document.getElementById('productsContainer');
+      container.innerHTML = '';
+      
+      result.data.forEach(product => {
+        const productDiv = document.createElement('div');
+        productDiv.className = 'product-item';
+        productDiv.onclick = () => selectProduct(product.name);
+        productDiv.innerHTML = `
+          <strong>${product.name}</strong><br>
+          Price: $${product.price.toFixed(2)} | Qty: ${product.quantity}
+        `;
+        container.appendChild(productDiv);
+      });
+
+      document.getElementById('productsList').style.display = 'block';
+    }
+  } catch (error) {
+    console.error('Error loading products:', error);
   }
 }
 
-// Handle form submission
-document.getElementById('ivaForm').addEventListener('submit', async function(e) {
-  e.preventDefault();
+// Select product from list
+function selectProduct(productName) {
+  document.getElementById('searchInput').value = productName;
+  searchProduct();
+}
 
+// Search product by name
+async function searchProduct() {
   const errorDiv = document.getElementById('errorMessage');
   errorDiv.style.display = 'none';
 
-  // Collect product data
-  const products = [];
-  for (let i = 1; i <= 5; i++) {
-    const name = document.getElementById(`name${i}`).value.trim();
-    const price = parseFloat(document.getElementById(`price${i}`).value);
+  const productName = document.getElementById('searchInput').value.trim();
 
-    if (!name || isNaN(price) || price <= 0) {
-      errorDiv.textContent = `Product ${i}: Please enter a valid name and price`;
-      errorDiv.style.display = 'block';
-      return;
-    }
-
-    products.push({
-      name: name,
-      price: price
-    });
+  if (!productName) {
+    errorDiv.textContent = 'Please enter a product name';
+    errorDiv.style.display = 'block';
+    return;
   }
 
-  // Disable submit button
-  const submitBtn = document.querySelector('.btn-submit');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Calculating...';
-
-  // Send to backend
   try {
     const response = await fetch(`${BACKEND_URL}/api/calculate-iva`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ products: products })
+      body: JSON.stringify({ name: productName })
     });
 
     const result = await response.json();
@@ -96,41 +97,38 @@ document.getElementById('ivaForm').addEventListener('submit', async function(e) 
     }
   } catch (error) {
     console.error('Error:', error);
-    errorDiv.textContent = 'Error connecting to server. Check if backend is running.';
+    errorDiv.textContent = 'Error connecting to server. Check backend status.';
     errorDiv.style.display = 'block';
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Calculate IVA';
   }
-});
+}
 
 // Display results
 function displayResults(data) {
-  document.getElementById('totalPrice').textContent = '$' + data.totalPrice.toFixed(2);
-  document.getElementById('ivaAmount').textContent = '$' + data.ivaAmount.toFixed(2);
-  document.getElementById('finalPrice').textContent = '$' + data.finalPrice.toFixed(2);
+  document.getElementById('productName').textContent = data.product.name;
+  document.getElementById('productDescription').textContent = `Quantity in stock: ${data.product.quantity}`;
+  document.getElementById('productPrice').textContent = '$' + data.product.price.toFixed(2);
+  document.getElementById('ivaAmount').textContent = '$' + data.calculation.ivaAmount.toFixed(2);
+  document.getElementById('priceWithIVA').textContent = '$' + data.calculation.priceWithIVA.toFixed(2);
 
   document.getElementById('resultSection').style.display = 'block';
-  document.querySelector('.input-section').style.display = 'none';
-
-  // Scroll to results
+  document.querySelector('.search-section').style.display = 'none';
   document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
 
   // Load updated history
-  loadCalculationHistory();
+  loadSearchHistory();
 }
 
 // Reset form
 function resetForm() {
-  document.getElementById('ivaForm').reset();
+  document.getElementById('searchInput').value = '';
   document.getElementById('resultSection').style.display = 'none';
-  document.querySelector('.input-section').style.display = 'block';
-  document.querySelector('.input-section').scrollIntoView({ behavior: 'smooth' });
-  createProductInputs();
+  document.querySelector('.search-section').style.display = 'block';
+  document.querySelector('.search-section').scrollIntoView({ behavior: 'smooth' });
+  loadAvailableProducts();
 }
 
-// Load calculation history
-async function loadCalculationHistory() {
+// Load search history
+async function loadSearchHistory() {
   try {
     const response = await fetch(`${BACKEND_URL}/api/calculations`);
     const result = await response.json();
@@ -139,19 +137,17 @@ async function loadCalculationHistory() {
       const historyDiv = document.getElementById('historyContainer');
       historyDiv.innerHTML = '';
 
-      result.data.slice(0, 5).forEach((calc) => {
+      result.data.slice(0, 10).forEach((calc) => {
         const date = new Date(calc.createdAt).toLocaleString();
         const historyItem = document.createElement('div');
         historyItem.className = 'history-item';
         
-        let productsText = calc.products.map(p => `${p.name}: $${p.price}`).join(', ');
-        
         historyItem.innerHTML = `
           <small>${date}</small>
-          <div><strong>Total:</strong> $${parseFloat(calc.totalPrice).toFixed(2)}</div>
-          <div><strong>IVA (21%):</strong> $${calc.ivaAmount.toFixed(2)}</div>
-          <div><strong>Final:</strong> $${calc.finalPrice.toFixed(2)}</div>
-          <div><small style="color: #999;">Products: ${productsText}</small></div>
+          <div><strong>Product:</strong> ${calc.productName}</div>
+          <div><strong>Price:</strong> $${calc.productPrice.toFixed(2)}</div>
+          <div><strong>IVA (15%):</strong> $${calc.ivaAmount.toFixed(2)}</div>
+          <div><strong>Total with IVA:</strong> $${calc.priceWithIVA.toFixed(2)}</div>
         `;
         historyDiv.appendChild(historyItem);
       });
@@ -160,6 +156,5 @@ async function loadCalculationHistory() {
     }
   } catch (error) {
     console.error('Error loading history:', error);
-    console.log('Using offline mode - calculations stored locally');
   }
 }

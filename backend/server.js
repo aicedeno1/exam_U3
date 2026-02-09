@@ -24,21 +24,26 @@ mongoose.connect(mongoURL, {
 .then(() => console.log('Connected to MongoDB'))
 .catch((err) => console.log('MongoDB connection error:', err));
 
-// Schema for IVA Calculation
-const ivaCalculationSchema = new mongoose.Schema({
-  products: [
-    {
-      name: String,
-      price: Number
-    }
-  ],
-  totalPrice: Number,
-  ivaRate: Number,
-  ivaAmount: Number,
-  finalPrice: Number,
+// Schema for Products
+const productSchema = new mongoose.Schema({
+  name: String,
+  price: Number,
+  quantity: Number,
   createdAt: { type: Date, default: Date.now }
 });
 
+// Schema for IVA Calculation
+const ivaCalculationSchema = new mongoose.Schema({
+  productId: mongoose.Schema.Types.ObjectId,
+  productName: String,
+  productPrice: Number,
+  ivaRate: Number,
+  ivaAmount: Number,
+  priceWithIVA: Number,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Product = mongoose.model('product', productSchema);
 const IVACalculation = mongoose.model('ivaCalculation', ivaCalculationSchema);
 
 // Routes
@@ -48,38 +53,39 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'Backend is running' });
 });
 
-// POST - Calculate IVA
+// POST - Calculate IVA by product name (search)
 app.post('/api/calculate-iva', async (req, res) => {
   try {
-    const { products } = req.body;
+    const { name } = req.body;
 
-    // Validate that we have exactly 5 products
-    if (!Array.isArray(products) || products.length !== 5) {
+    if (!name || name.trim() === '') {
       return res.status(400).json({ 
-        error: 'You must provide exactly 5 products' 
+        error: 'Product name is required' 
       });
     }
 
-    // Calculate totals
-    let totalPrice = 0;
-    products.forEach(product => {
-      if (!product.name || product.price === undefined) {
-        throw new Error('Each product must have name and price');
-      }
-      totalPrice += parseFloat(product.price);
-    });
+    // Search product by name (case-insensitive)
+    const product = await Product.findOne({ name: new RegExp(name, 'i') });
+    
+    if (!product) {
+      return res.status(404).json({ 
+        error: 'Product not found' 
+      });
+    }
 
-    const ivaRate = 21; // 21% IVA
-    const ivaAmount = (totalPrice * ivaRate) / 100;
-    const finalPrice = totalPrice + ivaAmount;
+    // Calculate IVA (15%)
+    const ivaRate = 15;
+    const ivaAmount = (product.price * ivaRate) / 100;
+    const priceWithIVA = product.price + ivaAmount;
 
-    // Save to MongoDB
+    // Save calculation
     const calculation = new IVACalculation({
-      products: products,
-      totalPrice: totalPrice.toFixed(2),
+      productId: product._id,
+      productName: product.name,
+      productPrice: product.price,
       ivaRate: ivaRate,
       ivaAmount: parseFloat(ivaAmount.toFixed(2)),
-      finalPrice: parseFloat(finalPrice.toFixed(2))
+      priceWithIVA: parseFloat(priceWithIVA.toFixed(2))
     });
 
     await calculation.save();
@@ -87,15 +93,127 @@ app.post('/api/calculate-iva', async (req, res) => {
     res.json({
       success: true,
       data: {
-        products: products,
-        totalPrice: parseFloat(totalPrice.toFixed(2)),
-        ivaRate: ivaRate,
-        ivaAmount: parseFloat(ivaAmount.toFixed(2)),
-        finalPrice: parseFloat(finalPrice.toFixed(2)),
-        savedId: calculation._id
+        product: {
+          id: product._id,
+          name: product.name,
+          price: product.price,
+          quantity: product.quantity
+        },
+        calculation: {
+          ivaRate: ivaRate,
+          ivaAmount: parseFloat(ivaAmount.toFixed(2)),
+          priceWithIVA: parseFloat(priceWithIVA.toFixed(2)),
+          savedId: calculation._id
+        }
       }
     });
 
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message 
+    });
+  }
+});
+
+// POST - Calculate IVA by product ID
+app.post('/api/calculate-iva/:productId', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.productId);
+    
+    if (!product) {
+      return res.status(404).json({ 
+        error: 'Product not found' 
+      });
+    }
+
+    // Calculate IVA (15%)
+    const ivaRate = 15;
+    const ivaAmount = (product.price * ivaRate) / 100;
+    const priceWithIVA = product.price + ivaAmount;
+
+    // Save calculation
+    const calculation = new IVACalculation({
+      productId: product._id,
+      productName: product.name,
+      productPrice: product.price,
+      ivaRate: ivaRate,
+      ivaAmount: parseFloat(ivaAmount.toFixed(2)),
+      priceWithIVA: parseFloat(priceWithIVA.toFixed(2))
+    });
+
+    await calculation.save();
+
+    res.json({
+      success: true,
+      data: {
+        product: {
+          id: product._id,
+          name: product.name,
+          price: product.price,
+          quantity: product.quantity
+        },
+        calculation: {
+          ivaRate: ivaRate,
+          ivaAmount: parseFloat(ivaAmount.toFixed(2)),
+          priceWithIVA: parseFloat(priceWithIVA.toFixed(2)),
+          savedId: calculation._id
+        }
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message 
+    });
+  }
+});
+
+// GET - Get all products
+app.get('/api/products', async (req, res) => {
+  try {
+    const products = await Product.find();
+    res.json({
+      success: true,
+      data: products
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message 
+    });
+  }
+});
+
+// POST - Add new product
+app.post('/api/products', async (req, res) => {
+  try {
+    const { name, price, quantity } = req.body;
+
+    if (!name || price === undefined || !quantity) {
+      return res.status(400).json({ 
+        error: 'Product name, price, and quantity are required' 
+      });
+    }
+
+    // Check if product already exists
+    const existingProduct = await Product.findOne({ name: new RegExp(`^${name}$`, 'i') });
+    if (existingProduct) {
+      return res.status(400).json({ 
+        error: 'Product already exists' 
+      });
+    }
+
+    const product = new Product({
+      name: name,
+      price: parseFloat(price),
+      quantity: parseInt(quantity)
+    });
+
+    await product.save();
+
+    res.json({
+      success: true,
+      data: product
+    });
   } catch (error) {
     res.status(500).json({ 
       error: error.message 

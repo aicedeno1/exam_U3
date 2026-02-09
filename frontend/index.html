@@ -3,49 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IVA Calculator - Option 2</title>
+  <title>IVA Calculator - Search Product</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>IVA Calculator</h1>
-      <p>Calculate IVA for 5 Products</p>
+      <p>Search Product & Calculate IVA (15%)</p>
     </header>
 
     <main>
-      <section class="input-section">
-        <h2>Enter 5 Products</h2>
-        <form id="ivaForm">
-          <div class="products-container" id="productsContainer">
-            <!-- Products will be added here -->
-          </div>
-          <button type="submit" class="btn-submit">Calculate IVA</button>
-        </form>
+      <section class="search-section">
+        <h2>Search Product</h2>
+        <div class="search-container">
+          <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="Enter product name (e.g., Milk, Coffee, Tea)"
+            autofocus
+          >
+          <button type="button" class="btn-search" onclick="searchProduct()">Search & Calculate IVA</button>
+        </div>
+        
+        <div id="productsList" style="display: none; margin-top: 20px;">
+          <h3>Available Products</h3>
+          <div id="productsContainer" class="products-list"></div>
+        </div>
+
         <div id="errorMessage" style="display: none; color: #dc3545; margin-top: 15px; padding: 10px; background: #f8d7da; border-radius: 5px;"></div>
       </section>
 
       <section class="result-section" id="resultSection" style="display: none;">
-        <h2>Calculation Results</h2>
+        <h2>IVA Calculation Result</h2>
         <div class="result-card">
-          <div class="result-item">
-            <label>Total Price (without IVA):</label>
-            <span id="totalPrice">$0.00</span>
+          <div class="product-info">
+            <h3 id="productName">Product Name</h3>
+            <p id="productDescription">Details</p>
           </div>
+          
+          <div class="result-item">
+            <label>Product Price:</label>
+            <span id="productPrice">$0.00</span>
+          </div>
+          
           <div class="result-item highlight">
-            <label>IVA Amount (21%):</label>
+            <label>IVA Amount (15%):</label>
             <span id="ivaAmount">$0.00</span>
           </div>
+          
           <div class="result-item">
-            <label>Final Price (with IVA):</label>
-            <span id="finalPrice">$0.00</span>
+            <label>Price with IVA:</label>
+            <span id="priceWithIVA">$0.00</span>
           </div>
         </div>
-        <button type="button" class="btn-reset" onclick="resetForm()">Calculate Again</button>
+        <button type="button" class="btn-reset" onclick="resetForm()">Search Another Product</button>
       </section>
 
       <section class="history-section" id="historySection" style="display: none;">
-        <h2>Calculation History</h2>
+        <h2>Search History</h2>
         <div id="historyContainer"></div>
       </section>
     </main>
